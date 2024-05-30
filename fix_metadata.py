@@ -4,6 +4,7 @@ import json
 
 # Python script for fixing the metadata of images obtained from a Google Takeout archive.
 
+
 def longest_common_prefix(string1, string2):
     """Return the longest common prefix of two strings."""
     common_prefix = ""
@@ -30,42 +31,39 @@ def best_match(target, candidates):
 
     return best_match
 
-def find_corresponding_image(metadata_file, candidates):
-    """Return the path of the image file corresponding to the given metadata file."""
-    corresponding_image = os.path.splitext(metadata_file)[0]
-    
-    if corresponding_image not in filenames:
-        corresponding_image = best_match(
-            filename, [f for f in filenames if f != filename]
-        )
-        
-    return os.path.join(dirpath, corresponding_image)
+
+def select_meta_file(image_filename, candidate_filenames):
+    """Return the path of the metadata file corresponding to the given image file."""
+    meta_filename = os.path.splitext(image_filename)[0]
+
+    if meta_filename not in candidate_filenames:
+        meta_filename = best_match(image_filename, candidate_filenames)
+
+    return meta_filename
 
 
 """Iterate over all files in the given directory and set the modification time of the corresponding image file to the timestamp of the metadata file."""
 root_path = sys.argv[1]
 
 for dirpath, dirnames, filenames in os.walk(root_path):
-    for filename in filenames:
+    meta_filenames = []
+    image_filenames = []
+
+    for file in filenames:
+        if os.path.splitext(file)[1] == ".json":
+            meta_filenames.append(file)
+        else:
+            image_filenames.append(file)
+
+    for image in image_filenames:
         try:
-            if not filename.endswith(".json"):
-                continue
+            image_path = os.path.join(dirpath, image)
+            meta_path = os.path.join(dirpath, select_meta_file(image, meta_filenames))
 
-            if filename in [
-                "Metadaten.json",
-                "print-subscriptions.json",
-                "shared_album_comments.json",
-                "user-generated-memory-titles.json",
-            ]:
-                continue
-
-            file_path = os.path.join(dirpath, filename)
-            image_path = find_corresponding_image(filename, filenames)
-
-            with open(file_path, "r") as json_file:
-                metadata = json.load(json_file)
-            timestamp = int(metadata["photoTakenTime"]["timestamp"])
-            os.utime(image_path, (timestamp, timestamp))
+            with open(meta_path, "r") as meta_file:
+                metadata = json.load(meta_file)
+                timestamp = int(metadata["photoTakenTime"]["timestamp"])
+                os.utime(image_path, (timestamp, timestamp))
 
         except Exception as e:
-            print(f"Error processing {file_path}: {e}")
+            print(f"Error processing {image_path}: {type(e).__name__}: {e}")
